@@ -26,19 +26,9 @@ from helper_functions import (
     get_holocean_config_BOP as get_config,
 )
 
-from plot_helpers import *
-
-# from controllers import (depth_pid_controller, heading_pid_controller, speed_pid_controller, 
-#                      lookahead_distance,
-#                      frenet_seret_cross_track_error as frenet_seret_cte)
+from plot_helpers import get_airplane_xy, get_airplane_pose
 
 from path_planners import RRTPlanner, RRTStarPlanner, AStarPlanner
-
-# from visualization import (
-#     setup_plot, update_airplane_icon, update_plot_data
-# )
-
-# from PID_lib import PIDController
 
 q_init = [-6, -6, -12]
 q_goal = [0, 8, -12]
@@ -76,38 +66,15 @@ bop_y_data.append(BOP_corners[0][1])
 fig, ax = plt.subplots()
 
 track_line, = ax.plot([], [], 'r--o', label='Track')
-# track_line, = ax.plot([], [], 'r--', label='Track')
 bop_line, = ax.plot(bop_x_data, bop_y_data, 'k-', label='BOP')
 bop_line.set_xdata(bop_x_data)
 bop_line.set_ydata(bop_y_data)
 
 position_line, = ax.plot(pos_x_data, pos_y_data)
 
-
-
 # Initialize airplane icon at the origin
 start_pose = cfg["agents"][0]["location"]+cfg["agents"][0]["rotation"]
-# def get_airplane_pose(start_pose):   
-#     return [start_pose[0], start_pose[1], start_pose[5]]  # [x, y, yaw]
-# # airplane_pose = [start_pose[0], start_pose[1], start_pose[5]]  # [x, y, yaw]
-
-# def get_airplane_xy(pose):    
-#     c, s = np.cos(np.deg2rad(pose[2])), np.sin(np.deg2rad(pose[2]))
-#     R = np.array([[c, -s], [s, c]])
-#     airplane_shape = np.array([
-#         [0.5, 0.0],   # Nose
-#         [-0.5, 0.2],  # Left wing
-#         [-0.3, 0.0],  # Tail left
-#         [-0.5, -0.2], # Right wing
-#         [0.5, 0.0]    # Back to nose
-#     ])
-#     airplane_xy = (R @ airplane_shape.T).T + [pose[0], pose[1]]
-#     return airplane_xy 
-
 airplane_patch = Polygon(get_airplane_xy(get_airplane_pose(start_pose)), closed=True, color='blue', alpha=0.7)
-    # return airplane_patch
-    
-# airplane_patch = get_airplane_xy(get_airplane_pose(start_pose))
 ax.add_patch(airplane_patch)
 
 ax.set_xlabel("X (m)")
@@ -184,7 +151,14 @@ with holoocean.make(scenario_cfg=cfg)as env:
     lookahead_distance = 0.01
 
     watch_circle_radius = 0.5  # meters
-    #create controllers here
+    
+    ## Below is a clever trick, where we want to hold a random sampler constant, for reproducibility.
+    # Uncomment the lines below to set a random seed for reproducibility
+    # import random
+    # random_seed = 42  # Or any integer you want
+    # random.seed(random_seed)
+    # np.random.seed(random_seed)
+    
     while True:                
         current_path = [track_list[goal_idx-1],
                          track_list[goal_idx]]
@@ -192,7 +166,6 @@ with holoocean.make(scenario_cfg=cfg)as env:
         # Step simulation
         simul_state = env.step(acceleration_global)
       
-        
         ## Get hydro forces from HoloOcean
         sensor_state = simul_state["DynamicsSensor"]
         
