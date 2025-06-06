@@ -218,16 +218,18 @@ with holoocean.make(scenario_cfg=cfg)as env:
         normal_error, binormal_error, frenet_serret_frame = frenet_seret_cte(pose[:3], current_path[0], current_path[1])
         # if distance_monitor.is_growing():
         if D_goal > path_length + watch_circle_radius*2:
+            print("USING GOAL HEADING")
             goal_heading =  heading_to_point(pose[:2], current_path[1][:2])
-        else:    
+        else:
+            # print("USING FRENET")    
             goal_heading = frenet_seret_heading(lookahead_distance, normal_error, frenet_serret_frame)
         
         heading_error = control_angle_delta_degrees(yaw, goal_heading)
         if abs(heading_error) > 10:
-            print("HEADING ERROR TOO HIGH")
+            print("NOT DRIVING")
             speed_command = 0
         else:
-            print("DRIVING")
+            # print("DRIVING")
             speed_command = 0.5
         # Notice here, I am controlling based on error rather than setpoint
         heading_control = heading_pid_controller.update(heading_error)
