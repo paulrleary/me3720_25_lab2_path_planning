@@ -171,9 +171,9 @@ with holoocean.make(scenario_cfg=cfg)as env:
         
         hydro_forces_global = global_hydro_forces(sensor_state)
         
-        ## Get the AUV state from the simulation
+       ## Get the AUV state from the simulation
         auv_state = get_states_6dof(simul_state["DynamicsSensor"])
-        
+         
         pose = auv_state["pose"]
         vel = auv_state["velocity"]
         t = auv_state["time"]

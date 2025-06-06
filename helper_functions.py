@@ -63,6 +63,35 @@ def rotate_6dof_forces(forces, eulers):
 def distance(p1, p2):
     return np.linalg.norm(np.array(p1) - np.array(p2))
 
+def closest_waypoint_index(waypoints_list, current_pos):
+    """
+    Find the index of the closest waypoint to current_pos based on x,y distance.
+    """
+    min_distance_sq = float('inf')
+    closest_index = -1
+    
+    for i, waypoint in enumerate(waypoints_list):
+        dx = waypoint[0] - current_pos[0]
+        dy = waypoint[1] - current_pos[1]
+        distance_sq = dx*dx + dy*dy
+        
+        if distance_sq < min_distance_sq:
+            min_distance_sq = distance_sq
+            closest_index = i
+    
+    return closest_index
+
+def heading_to_point(p1, p2):
+    """
+    Returns the angle in degrees from point p1 to point p2 in 2D.
+    The angle is measured from the positive x-axis, counterclockwise.
+    """
+    dx = p2[0] - p1[0]
+    dy = p2[1] - p1[1]
+    angle_rad = np.arctan2(dy, dx)  # radians, handles all quadrants[1][4][6]
+    angle_deg = np.degrees(angle_rad)  # convert to degrees[3][6]
+    return angle_deg
+
 def frenet_seret_frame_to_heading_command(lookahead_distance, normal_error, frenet_serret_frame):
     T=frenet_serret_frame[0]
     N=frenet_serret_frame[1]
@@ -114,6 +143,43 @@ def get_holocean_config_BOP(q_init, heading_init):
                 "agent_name": "auv0",
                 "agent_type": "HoveringAUV",
                 "sensors": [
+                    {
+                        "sensor_type": "DynamicsSensor",
+                    },
+                ],
+                "control_scheme": 2,
+                "location": q_init,
+                "rotation": [0, 0, heading_init],
+            }
+        ]
+    }
+    
+def get_holocean_config_BOP_april_tags(q_init, heading_init):
+    """
+    Create a configuration dictionary for the HoloOcean simulation.
+    """
+    return {
+        "name": "test_rgb_camera",
+        "world": "BlowoutPreventerSampleLevel",
+        "package_name": "USS_Environ",
+        "main_agent": "auv0",
+        "ticks_per_sec": 10,
+        "agents": [
+            {
+                "agent_name": "auv0",
+                "agent_type": "HoveringAUV",
+                "sensors": [
+                    {
+                    "sensor_type": "RGBCamera",
+                    "sensor_name": "LeftCamera",
+                    "socket": "CameraLeftSocket",
+                    "Hz": 10,
+                    "configuration": {
+                        "CaptureWidth": 512,
+                        "CaptureHeight": 512,
+                        "ExposureMethod": "AEM_Histogram",
+                    }
+                },
                     {
                         "sensor_type": "DynamicsSensor",
                     },

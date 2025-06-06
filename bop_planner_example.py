@@ -47,10 +47,10 @@ if __name__ == "__main__":
     max_iter = 2000
     grid_res = 0.2
     
-    # import random
-    # random_seed = 42  # Or any integer you want
-    # random.seed(random_seed)
-    # np.random.seed(random_seed)
+    import random
+    random_seed = 42  # Or any integer you want
+    random.seed(random_seed)
+    np.random.seed(random_seed)
     
     astar_planner = AStarPlanner(obstacles, start, goal,
                                  grid_res=grid_res, max_iter=10000)

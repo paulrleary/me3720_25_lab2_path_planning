@@ -20,11 +20,13 @@ from HoveringAUV_Physical_Model import global_hydro_forces, thrusters_to_body_fo
 # from my_PID_controllers import depth_pid_controller, heading_pid_controller, speed_pid_controller, lookahead_distance
 from helper_functions import (
     vert_force_to_thrusters, yaw_force_to_thrusters, speed_force_to_thrusters, 
-    control_angle_delta_degrees, rotate_6dof_forces, distance,
-    frenet_seret_frame_to_heading_command as frenet_seret_heading,
+    control_angle_delta_degrees, rotate_6dof_forces, distance,closest_waypoint_index,
+    frenet_seret_frame_to_heading_command as frenet_seret_heading, heading_to_point,
     get_states_6dof, rotate_velocities_global_body as rotate_velocities_g_b,
-    get_holocean_config_BOP as get_config,
+    get_holocean_config_BOP_april_tags as get_config,
 )
+
+from error_monitors import DistanceErrorMonitor as distance_monitor
 
 from plot_helpers import get_airplane_xy, get_airplane_pose
 
@@ -66,6 +68,7 @@ bop_y_data.append(BOP_corners[0][1])
 fig, ax = plt.subplots()
 
 track_line, = ax.plot([], [], 'r--o', label='Track')
+path_line, = ax.plot([], [], 'g-', label='Current')
 bop_line, = ax.plot(bop_x_data, bop_y_data, 'k-', label='BOP')
 bop_line.set_xdata(bop_x_data)
 bop_line.set_ydata(bop_y_data)
@@ -148,9 +151,12 @@ with holoocean.make(scenario_cfg=cfg)as env:
     heading_pid_controller = PIDController(Kp=1, Ki=0.2, Kd=0.4, setpoint=0)
     speed_pid_controller = PIDController(Kp=1, Ki=0, Kd=1, setpoint=0)
 
-    lookahead_distance = 0.01
+    lookahead_distance = 0.5
 
     watch_circle_radius = 0.5  # meters
+    
+    D_goal_error_check = distance_monitor(threshold=5)
+    
     
     ## Below is a clever trick, where we want to hold a random sampler constant, for reproducibility.
     # Uncomment the lines below to set a random seed for reproducibility
@@ -187,10 +193,13 @@ with holoocean.make(scenario_cfg=cfg)as env:
         # with small normal errors, and another form of controller when trying to get on a new path.
         
         ## Get distance to the next waypoint
-        D = distance(pose[:2], current_path[1][:2]) # distance to the next waypoint, horizontal only
+        D_goal = distance(pose[:2], current_path[1][:2]) # distance to the next waypoint, horizontal only
+        
+        
         ## Increment the goal index if the AUV is close enough to the next waypoint
-        if D < watch_circle_radius:
+        if D_goal < watch_circle_radius:
             goal_idx += 1
+            D_goal_error_check.reset()
             if goal_idx >= len(track_list):
                 print('Finished track!')
                 break
@@ -205,23 +214,61 @@ with holoocean.make(scenario_cfg=cfg)as env:
         depth_control = depth_pid_controller.update(depth)
         depth_error = depth_pid_controller.current_error
         
+        #### Define Errors And Control Logic
+        
         ## Calculate the heading control value   
         yaw=pose[5]
         normal_error, binormal_error, frenet_serret_frame = frenet_seret_cte(pose[:3], current_path[0], current_path[1])
-        goal_heading = frenet_seret_heading(lookahead_distance, normal_error, frenet_serret_frame)
-        heading_error = control_angle_delta_degrees(yaw, goal_heading)
+        
+        
+        
+        D_goal_error_check.update(D_goal)
+        
+        if D_goal_error_check.is_above_threshold():
+            print("ABOVE THRESH")
+            new_goal_idx = closest_waypoint_index(track_list, pose[:3])
+            
+            goal_heading = heading_to_point(pose[:2], track_list[new_goal_idx][:2])
+            heading_error = control_angle_delta_degrees(yaw, goal_heading)
+            
+            if abs(heading_error) > 10:
+                speed_command = 0
+            else:
+                speed_command = 0.5
+                
+            if new_goal_idx != goal_idx:
+                goal_idx = new_goal_idx
+                D_goal_error_check.reset()
+        
+            pass # Check for next best waypoint
+        
+        else:
+            if D_goal_error_check.is_growing():
+                goal_heading =  heading_to_point(pose[:2], current_path[1][:2])
+            else:
+                goal_heading = frenet_seret_heading(lookahead_distance, normal_error, frenet_serret_frame)
+                
+            heading_error = control_angle_delta_degrees(yaw, goal_heading)
+            
+            if abs(heading_error) > 10:
+                speed_command = 0
+            else:
+                speed_command = 0.5
+        
         # Notice here, I am controlling based on error rather than setpoint
         heading_control = heading_pid_controller.update(heading_error)
+        
                 
         ## Calculate the speed control value
         body_velocity = rotate_velocities_g_b(vel[:3], pose[3:6])
         forward_speed = body_velocity[0]  # Forward speed in the body frame (velocity in body frame x direction)
         
-        speed_command = 0.5
+        # speed_command = 0.5
         speed_pid_controller.setpoint = speed_command
         # Notice here, I am controlling based on setpoint rather than error
         speed_control = speed_pid_controller.update(forward_speed)
         # speed_control = 0.5 # This can be used to test the speed control without PID, i.e. a constant speed command
+        
         
         ## Calculate the thruster commands based on the control values
         vert_thruster_command = vert_force_to_thrusters(depth_control)   
@@ -240,6 +287,9 @@ with holoocean.make(scenario_cfg=cfg)as env:
         acceleration_global = forces_to_accelerations(net_force_global)
         
         ## UPdate the plot with current position
+        path_line.set_xdata([current_path[0][0], current_path[1][0]])
+        path_line.set_ydata([current_path[0][1], current_path[1][1]])
+        
         airplane_patch.set_xy(get_airplane_xy(get_airplane_pose(pose)))
         
         pos_x_data.append(pose[0])
