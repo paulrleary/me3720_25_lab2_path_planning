@@ -32,7 +32,9 @@ from plot_helpers import get_airplane_xy, get_airplane_pose
 
 from path_planners import RRTPlanner, RRTStarPlanner, AStarPlanner
 
-q_init = [-6, -6, -12]
+# q_init = [-6, -6, -12]
+# q_init = [-6, 4, -12]
+q_init = [-5, 4, -12]
 q_goal = [0, 8, -12]
 
 heading_init = np.atan2(q_goal[1] - q_init[1], q_goal[0] - q_init[0]) * 180 / np.pi
@@ -95,7 +97,12 @@ max_iter = 2000
 grid_res = 0.2
 
 obstacles = [BOP_corners]
-
+## Below is a clever trick, where we want to hold a random sampler constant, for reproducibility.
+# Uncomment the lines below to set a random seed for reproducibility
+import random
+random_seed = 43  # Or any integer you want
+random.seed(random_seed)
+np.random.seed(random_seed)
 ## Create the planner objects and plan the paths
 astar_planner = AStarPlanner(obstacles, start, goal,
                                 grid_res=grid_res, max_iter=max_iter)
@@ -148,26 +155,27 @@ with holoocean.make(scenario_cfg=cfg)as env:
     ### STUDENT UPDATE NUMBER 1: Update the PID controllers as you see fit
     
     depth_pid_controller = PIDController(Kp=4, Ki=0.1, Kd=3, setpoint=0)
-    heading_pid_controller = PIDController(Kp=1, Ki=0.2, Kd=0.4, setpoint=0)
-    speed_pid_controller = PIDController(Kp=1, Ki=0, Kd=1, setpoint=0)
+    heading_pid_controller = PIDController(Kp=.5, Ki=0, Kd=0, setpoint=0)
+    speed_pid_controller = PIDController(Kp=1, Ki=0, Kd=0, setpoint=0)
 
     lookahead_distance = 0.5
 
     watch_circle_radius = 0.5  # meters
     
-    D_goal_error_check = distance_monitor(threshold=5)
+    distance_monitor = distance_monitor()
     
     
-    ## Below is a clever trick, where we want to hold a random sampler constant, for reproducibility.
-    # Uncomment the lines below to set a random seed for reproducibility
-    # import random
-    # random_seed = 42  # Or any integer you want
-    # random.seed(random_seed)
-    # np.random.seed(random_seed)
+    # path_following_state = 'aligning'
+    path_following_state = 'following'
+    
+    
     
     while True:                
         current_path = [track_list[goal_idx-1],
                          track_list[goal_idx]]
+        
+        path_length = distance(current_path[0], current_path[1])
+        distance_monitor.threshold = path_length+2*watch_circle_radius
             
         # Step simulation
         simul_state = env.step(acceleration_global)
@@ -199,7 +207,7 @@ with holoocean.make(scenario_cfg=cfg)as env:
         ## Increment the goal index if the AUV is close enough to the next waypoint
         if D_goal < watch_circle_radius:
             goal_idx += 1
-            D_goal_error_check.reset()
+            distance_monitor.reset()
             if goal_idx >= len(track_list):
                 print('Finished track!')
                 break
@@ -219,41 +227,53 @@ with holoocean.make(scenario_cfg=cfg)as env:
         ## Calculate the heading control value   
         yaw=pose[5]
         normal_error, binormal_error, frenet_serret_frame = frenet_seret_cte(pose[:3], current_path[0], current_path[1])
-        
-        
-        
-        D_goal_error_check.update(D_goal)
-        
-        if D_goal_error_check.is_above_threshold():
-            print("ABOVE THRESH")
-            new_goal_idx = closest_waypoint_index(track_list, pose[:3])
-            
-            goal_heading = heading_to_point(pose[:2], track_list[new_goal_idx][:2])
-            heading_error = control_angle_delta_degrees(yaw, goal_heading)
-            
-            if abs(heading_error) > 10:
-                speed_command = 0
-            else:
-                speed_command = 0.5
-                
-            if new_goal_idx != goal_idx:
-                goal_idx = new_goal_idx
-                D_goal_error_check.reset()
-        
-            pass # Check for next best waypoint
-        
+        goal_heading = frenet_seret_heading(lookahead_distance, normal_error, frenet_serret_frame)
+        heading_error = control_angle_delta_degrees(yaw, goal_heading)
+        if abs(heading_error) > 10:
+            print("HEADING ERROR TOO HIGH")
+            speed_command = 0
         else:
-            if D_goal_error_check.is_growing():
-                goal_heading =  heading_to_point(pose[:2], current_path[1][:2])
-            else:
-                goal_heading = frenet_seret_heading(lookahead_distance, normal_error, frenet_serret_frame)
-                
-            heading_error = control_angle_delta_degrees(yaw, goal_heading)
+            print("DRIVING")
+            speed_command = 0.5
             
-            if abs(heading_error) > 10:
-                speed_command = 0
-            else:
-                speed_command = 0.5
+        # match path_following_state:
+        #     case 'following':
+        
+        #         D_goal_error_check.update(D_goal)
+                
+        #         if D_goal_error_check.is_above_threshold():
+        #             print("ABOVE DISTANCE THRESH")
+        #             new_goal_idx = closest_waypoint_index(track_list, pose[:3])
+                    
+        #             goal_heading = heading_to_point(pose[:2], track_list[new_goal_idx][:2])
+        #             heading_error = control_angle_delta_degrees(yaw, goal_heading)
+                    
+        #             if abs(heading_error) > 10:
+        #                 print("HEADING ERROR TOO HIGH")
+        #                 speed_command = 0
+        #             else:
+        #                 speed_command = 0.5
+                        
+        #             if new_goal_idx != goal_idx:
+        #                 goal_idx = new_goal_idx
+        #                 D_goal_error_check.reset()
+                
+        #             pass # Check for next best waypoint
+                
+        #         else:
+        #             if D_goal_error_check.is_growing():
+        #                 print("DISTANCE ERROR GROWING")
+        #                 goal_heading =  heading_to_point(pose[:2], current_path[1][:2])
+        #             else:
+        #                 # goal_heading = frenet_seret_heading(lookahead_distance, normal_error, frenet_serret_frame)
+        #                 goal_heading =  heading_to_point(pose[:2], current_path[1][:2])
+        #             heading_error = control_angle_delta_degrees(yaw, goal_heading)
+                    
+        #             if abs(heading_error) > 10:
+        #                 print("HEADING ERROR TOO HIGH")
+        #                 speed_command = 0
+        #             else:
+        #                 speed_command = 0.5
         
         # Notice here, I am controlling based on error rather than setpoint
         heading_control = heading_pid_controller.update(heading_error)
@@ -269,7 +289,7 @@ with holoocean.make(scenario_cfg=cfg)as env:
         speed_control = speed_pid_controller.update(forward_speed)
         # speed_control = 0.5 # This can be used to test the speed control without PID, i.e. a constant speed command
         
-        
+        print(heading_control, speed_control) 
         ## Calculate the thruster commands based on the control values
         vert_thruster_command = vert_force_to_thrusters(depth_control)   
         heading_thruster_command = yaw_force_to_thrusters(heading_control)

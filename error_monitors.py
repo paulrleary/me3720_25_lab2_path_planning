@@ -1,5 +1,5 @@
 class DistanceErrorMonitor:
-    def __init__(self, threshold):
+    def __init__(self, threshold = 2):
         self.threshold = threshold
         self.reset()
 

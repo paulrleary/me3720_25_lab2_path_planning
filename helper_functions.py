@@ -67,8 +67,10 @@ def closest_waypoint_index(waypoints_list, current_pos):
     """
     Find the index of the closest waypoint to current_pos based on x,y distance.
     """
+    # min_distance_sq = float('inf')
+    # closest_index = -1
+    closest_index = 0
     min_distance_sq = float('inf')
-    closest_index = -1
     
     for i, waypoint in enumerate(waypoints_list):
         dx = waypoint[0] - current_pos[0]
