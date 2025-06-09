@@ -25,7 +25,8 @@ def yaw_force_to_thrusters(force):
     command[4] = ind_force
     command[5] = -1*ind_force
     command[6] = -1*ind_force
-    command[7] = -ind_force
+    command[7] = ind_force
+    # command[7] = -ind_force
 
     return command
 
@@ -46,7 +47,7 @@ def control_angle_delta_degrees(current_angle, set_angle):
     set_angle (float): Second angle in degrees.
     
     Returns:
-    delta_angle (float): The difference between the two angles in degrees.
+    delta_angle (float): Thold stle windmille difference between the two angles in degrees.
     """
     delta_angle = (current_angle - set_angle + 180) % 360 - 180
     return delta_angle

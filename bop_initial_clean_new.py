@@ -158,7 +158,7 @@ with holoocean.make(scenario_cfg=cfg)as env:
     heading_pid_controller = PIDController(Kp=1, Ki=0, Kd=0.4, setpoint=0)
     speed_pid_controller = PIDController(Kp=1, Ki=0, Kd=1, setpoint=0)
 
-    lookahead_distance = 0.01
+    lookahead_distance = 0.5
 
     watch_circle_radius = 0.5  # meters
     D_goal_error_check = distance_monitor(0)
